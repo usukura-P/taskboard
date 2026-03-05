@@ -120,7 +120,7 @@ header h1 { font-size: 18px; font-weight: 600; }
   cursor: pointer;
   color: #aaa;
 }
-.cards { min-height: 4px; }
+.cards { min-height: 40px; }
 .cards.drag-over { background: rgba(255,255,255,0.03); border-radius: 8px; }
 .card {
   display: flex;
@@ -320,10 +320,27 @@ document.querySelectorAll('.add-row input').forEach(input => {
 let draggedId = null;
 function onDragStart(e) { draggedId = e.currentTarget.dataset.id; e.currentTarget.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; }
 function onDragEnd(e) { e.currentTarget.classList.remove('dragging'); draggedId = null; document.querySelectorAll('.cards').forEach(c => c.classList.remove('drag-over')); }
-document.querySelectorAll('.cards').forEach(c => {
-  c.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; c.classList.add('drag-over'); });
-  c.addEventListener('dragleave', () => c.classList.remove('drag-over'));
-  c.addEventListener('drop', e => { e.preventDefault(); c.classList.remove('drag-over'); if (!draggedId) return; const a = getDrop(c, e.clientY); moveTask(draggedId, c.dataset.col, a ? a.dataset.id : null); });
+// .cards と .section-body 両方でドロップ受付
+document.querySelectorAll('.section-body, .cards').forEach(el => {
+  el.addEventListener('dragover', e => {
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    const cards = el.classList.contains('cards') ? el : el.querySelector('.cards');
+    if (cards) cards.classList.add('drag-over');
+  });
+  el.addEventListener('dragleave', e => {
+    if (!el.contains(e.relatedTarget)) {
+      const cards = el.classList.contains('cards') ? el : el.querySelector('.cards');
+      if (cards) cards.classList.remove('drag-over');
+    }
+  });
+  el.addEventListener('drop', e => {
+    e.preventDefault();
+    const cards = el.classList.contains('cards') ? el : el.querySelector('.cards');
+    if (cards) cards.classList.remove('drag-over');
+    if (!draggedId || !cards) return;
+    const a = getDrop(cards, e.clientY);
+    moveTask(draggedId, cards.dataset.col, a ? a.dataset.id : null);
+  });
 });
 function getDrop(c, y) { for (const card of c.querySelectorAll('.card:not(.dragging)')) { const r = card.getBoundingClientRect(); if (y < r.top + r.height/2) return card; } return null; }
 
@@ -348,7 +365,9 @@ function onTouchEnd(e) {
   document.removeEventListener('touchmove', onTouchMove); document.removeEventListener('touchend', onTouchEnd);
   if (!touchData) return; if (touchData.ghost) touchData.ghost.remove();
   document.querySelectorAll('.cards').forEach(c => c.classList.remove('drag-over'));
-  if (touchData.moved) { const touch = e.changedTouches[0]; const t = document.elementFromPoint(touch.clientX, touch.clientY); const c = t ? t.closest('.cards') : null;
+  if (touchData.moved) { const touch = e.changedTouches[0]; const t = document.elementFromPoint(touch.clientX, touch.clientY);
+    let c = t ? t.closest('.cards') : null;
+    if (!c) { const sb = t ? t.closest('.section-body') : null; if (sb) c = sb.querySelector('.cards'); }
     if (c) { const a = getDrop(c, touch.clientY); moveTask(touchData.id, c.dataset.col, a ? a.dataset.id : null); }
     else { const card = document.querySelector(`.card[data-id="${touchData.id}"]`); if (card) card.classList.remove('dragging'); } }
   touchData = null;

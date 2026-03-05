@@ -151,6 +151,14 @@ header h1 { font-size: 18px; font-weight: 600; }
 .card .card-text { flex: 1; outline: none; min-height: 1.3em; word-break: break-word; }
 .card .card-text:focus { background: #333340; border-radius: 3px; padding: 1px 4px; margin: -1px -4px; }
 .card .priority-select { border: none; background: transparent; font-size: 11px; cursor: pointer; outline: none; color: #777; padding: 2px; flex-shrink: 0; }
+.card .due-input { border: none; background: transparent; font-size: 10px; color: #888; outline: none; cursor: pointer; flex-shrink: 0; width: 20px; padding: 0; }
+.card .due-input::-webkit-calendar-picker-indicator { filter: invert(0.5); cursor: pointer; }
+.card .due-input[value=""] { width: 20px; }
+.card .due-input:not([value=""]) { width: auto; }
+.card .due-label { font-size: 10px; color: #888; flex-shrink: 0; white-space: nowrap; }
+.card .due-label.overdue { color: #e74c3c; }
+.card .due-label.today { color: #27ae60; }
+.card .due-label.soon { color: #f39c12; }
 .card .delete-btn {
   width: 20px; height: 20px; border: none; background: transparent; color: #555;
   cursor: pointer; font-size: 15px; line-height: 20px; text-align: center;
@@ -288,6 +296,24 @@ function createCardEl(task) {
   ['high','mid','low'].forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = PRIORITY_LABELS[p]; if (p === task.priority) o.selected = true; sel.appendChild(o); });
   sel.addEventListener('change', () => { task.priority = sel.value; saveTasks(); render(); });
   card.appendChild(sel);
+
+  // 期日
+  const dueWrap = document.createElement('span');
+  dueWrap.style.display = 'flex'; dueWrap.style.alignItems = 'center'; dueWrap.style.gap = '2px'; dueWrap.style.flexShrink = '0';
+  if (task.due) {
+    const label = document.createElement('span'); label.className = 'due-label';
+    const diff = Math.ceil((new Date(task.due) - new Date(new Date().toDateString())) / 864e5);
+    if (diff < 0) { label.textContent = `${-diff}日超過`; label.classList.add('overdue'); }
+    else if (diff === 0) { label.textContent = '今日'; label.classList.add('today'); }
+    else if (diff <= 2) { label.textContent = `あと${diff}日`; label.classList.add('soon'); }
+    else { label.textContent = task.due.slice(5).replace('-','/'); }
+    dueWrap.appendChild(label);
+  }
+  const dueIn = document.createElement('input'); dueIn.type = 'date'; dueIn.className = 'due-input';
+  dueIn.value = task.due || '';
+  dueIn.addEventListener('change', () => { task.due = dueIn.value || null; saveTasks(); render(); });
+  dueWrap.appendChild(dueIn);
+  card.appendChild(dueWrap);
 
   const del = document.createElement('button'); del.className = 'delete-btn'; del.textContent = '×';
   del.addEventListener('click', e => { e.stopPropagation(); deleteTask(task.id); });

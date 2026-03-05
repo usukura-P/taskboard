@@ -245,7 +245,7 @@ let tasks = [];
 
 // ========== データ ==========
 function loadTasks() {
-  try { tasks = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; tasks.forEach(t => { if (!t.priority) t.priority = 'mid'; }); } catch { tasks = []; }
+  try { tasks = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; tasks.forEach((t, i) => { if (!t.priority) t.priority = 'mid'; if (!t.createdAt) t.createdAt = i; }); } catch { tasks = []; }
 }
 function saveTasks() { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
@@ -266,7 +266,7 @@ function restoreCollapsed() {
 function render() {
   ['holding','today','waiting','done'].forEach(col => {
     const c = document.querySelector(`.cards[data-col="${col}"]`);
-    const ct = tasks.filter(t => t.col === col).sort((a,b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
+    const ct = tasks.filter(t => t.col === col).sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
     c.innerHTML = '';
     ct.forEach(t => c.appendChild(createCardEl(t)));
     document.querySelector(`.section[data-col="${col}"] .count`).textContent = ct.length;
@@ -299,7 +299,7 @@ function createCardEl(task) {
 }
 
 // ========== CRUD ==========
-function addTask(col, text, priority) { if (!text.trim()) return; tasks.push({ id: genId(), col, text: text.trim(), priority: priority || 'mid' }); saveTasks(); render(); }
+function addTask(col, text, priority) { if (!text.trim()) return; tasks.push({ id: genId(), col, text: text.trim(), priority: priority || 'mid', createdAt: Date.now() }); saveTasks(); render(); }
 function deleteTask(id) { tasks = tasks.filter(t => t.id !== id); saveTasks(); render(); }
 function moveTask(id, toCol, beforeId) {
   const task = tasks.find(t => t.id === id); if (!task) return;

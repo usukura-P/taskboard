@@ -281,7 +281,7 @@ function createCardEl(task) {
 
   const text = document.createElement('div'); text.className = 'card-text'; text.contentEditable = true; text.textContent = task.text;
   text.addEventListener('blur', () => { const v = text.textContent.trim(); if (!v) deleteTask(task.id); else { task.text = v; saveTasks(); } });
-  text.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); text.blur(); } });
+  text.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); text.blur(); } });
   card.appendChild(text);
 
   const sel = document.createElement('select'); sel.className = 'priority-select';
@@ -313,7 +313,7 @@ function clearDone() { tasks = tasks.filter(t => t.col !== 'done'); saveTasks();
 document.querySelectorAll('.add-row input').forEach(input => {
   const col = input.closest('.section').dataset.col;
   const ps = input.closest('.add-row').querySelector('.add-priority');
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') { addTask(col, input.value, ps ? ps.value : 'mid'); input.value = ''; } });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { addTask(col, input.value, ps ? ps.value : 'mid'); input.value = ''; } });
 });
 
 // ========== PC D&D ==========

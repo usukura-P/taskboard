@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>タスクボード</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #121218;
+  color: #e0e0e0;
+  min-height: 100vh;
+}
+header {
+  background: #1a1a2e;
+  color: #fff;
+  padding: 12px 20px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid #2a2a3e;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+header h1 { font-size: 18px; font-weight: 600; }
+.header-actions { display: flex; align-items: center; gap: 8px; }
+.archive-badge { font-size: 11px; color: #666; }
+.archive-btn {
+  background: #2a2a40;
+  border: 1px solid #444;
+  color: #aaa;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.archive-btn:hover { background: #3a3a55; color: #fff; }
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: #27ae60;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 300;
+  opacity: 0;
+  transition: transform 0.3s, opacity 0.3s;
+  pointer-events: none;
+}
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+.board {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 12px 12px 80px;
+}
+.section {
+  margin-bottom: 12px;
+  background: #1e1e2a;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  overflow: hidden;
+}
+.section-header {
+  padding: 10px 14px;
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  border-left: 4px solid transparent;
+}
+.section-header .count {
+  background: rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.section-header .toggle {
+  margin-left: auto;
+  font-size: 12px;
+  color: #666;
+  transition: transform 0.2s;
+}
+.section.collapsed .toggle { transform: rotate(-90deg); }
+.section.collapsed .section-body { display: none; }
+.section[data-col="holding"] .section-header { border-color: #4a90d9; color: #4a90d9; }
+.section[data-col="today"] .section-header { border-color: #27ae60; color: #27ae60; }
+.section[data-col="waiting"] .section-header { border-color: #e67e22; color: #e67e22; }
+.section[data-col="done"] .section-header { border-color: #95a5a6; color: #95a5a6; }
+.section-body { padding: 0 10px 10px; }
+.add-row { display: flex; gap: 6px; margin-bottom: 6px; }
+.add-row input {
+  flex: 1;
+  border: 1.5px dashed #3a3a4e;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  outline: none;
+  background: #16161f;
+  color: #e0e0e0;
+}
+.add-row input::placeholder { color: #555; }
+.add-row input:focus { border-color: #555; background: #1a1a28; }
+.add-row select {
+  border: 1.5px solid #3a3a4e;
+  border-radius: 8px;
+  padding: 4px 6px;
+  font-size: 12px;
+  outline: none;
+  background: #16161f;
+  cursor: pointer;
+  color: #aaa;
+}
+.cards { min-height: 4px; }
+.cards.drag-over { background: rgba(255,255,255,0.03); border-radius: 8px; }
+.card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #252535;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  cursor: grab;
+  position: relative;
+  transition: box-shadow 0.15s, opacity 0.15s;
+  font-size: 13px;
+  line-height: 1.4;
+  touch-action: none;
+  color: #e0e0e0;
+}
+.card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+.card.dragging { opacity: 0.3; }
+.priority-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.priority-dot.p-high { background: #e74c3c; }
+.priority-dot.p-mid { background: #f39c12; }
+.priority-dot.p-low { background: #3498db; }
+.card[data-priority="high"] { background: #2a1a1a; border-left: 3px solid #e74c3c; }
+.card[data-priority="mid"] { background: #2a2518; border-left: 3px solid #f39c12; }
+.card[data-priority="low"] { background: #1a2230; border-left: 3px solid #3498db; }
+.card .card-text { flex: 1; outline: none; min-height: 1.3em; word-break: break-word; }
+.card .card-text:focus { background: #333340; border-radius: 3px; padding: 1px 4px; margin: -1px -4px; }
+.card .priority-select { border: none; background: transparent; font-size: 11px; cursor: pointer; outline: none; color: #777; padding: 2px; flex-shrink: 0; }
+.card .delete-btn {
+  width: 20px; height: 20px; border: none; background: transparent; color: #555;
+  cursor: pointer; font-size: 15px; line-height: 20px; text-align: center;
+  border-radius: 4px; flex-shrink: 0; opacity: 0; transition: opacity 0.15s, color 0.15s;
+}
+.card:hover .delete-btn { opacity: 1; }
+.card .delete-btn:hover { color: #e74c3c; background: #3a2020; }
+.section[data-col="done"] .card .card-text { color: #666; text-decoration: line-through; }
+.section[data-col="done"] .card { opacity: 0.6; }
+.clear-done-btn { background: none; border: none; color: #666; cursor: pointer; font-size: 11px; padding: 2px 6px; margin-left: auto; }
+.clear-done-btn:hover { color: #e74c3c; }
+.drag-ghost {
+  position: fixed; pointer-events: none; z-index: 9999; opacity: 0.85;
+  transform: rotate(2deg); box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  border-radius: 8px; background: #252535; color: #e0e0e0;
+  padding: 8px 12px; font-size: 13px; max-width: 280px; border: 1px solid #444;
+}
+@media (max-width: 540px) { .board { padding: 8px 8px 80px; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>タスクボード</h1>
+  <div class="header-actions">
+    <span id="archiveBadge" class="archive-badge"></span>
+    <button class="archive-btn" onclick="manualArchiveAndSync()">保存</button>
+  </div>
+</header>
+<div id="toast" class="toast"></div>
+
+<div class="board" id="board">
+  <div class="section" data-col="today">
+    <div class="section-header" onclick="toggleSection(this)">
+      今日やる <span class="count">0</span> <span class="toggle">▼</span>
+    </div>
+    <div class="section-body">
+      <div class="add-row">
+        <input type="text" placeholder="タスクを追加…" />
+        <select class="add-priority"><option value="high">高</option><option value="mid" selected>中</option><option value="low">低</option></select>
+      </div>
+      <div class="cards" data-col="today"></div>
+    </div>
+  </div>
+  <div class="section" data-col="holding">
+    <div class="section-header" onclick="toggleSection(this)">
+      手持ち <span class="count">0</span> <span class="toggle">▼</span>
+    </div>
+    <div class="section-body">
+      <div class="add-row">
+        <input type="text" placeholder="タスクを追加…" />
+        <select class="add-priority"><option value="high">高</option><option value="mid" selected>中</option><option value="low">低</option></select>
+      </div>
+      <div class="cards" data-col="holding"></div>
+    </div>
+  </div>
+  <div class="section" data-col="waiting">
+    <div class="section-header" onclick="toggleSection(this)">
+      待ち <span class="count">0</span> <span class="toggle">▼</span>
+    </div>
+    <div class="section-body">
+      <div class="add-row">
+        <input type="text" placeholder="タスクを追加…（例：◯◯さん確認待ち）" />
+        <select class="add-priority"><option value="high">高</option><option value="mid" selected>中</option><option value="low">低</option></select>
+      </div>
+      <div class="cards" data-col="waiting"></div>
+    </div>
+  </div>
+  <div class="section" data-col="done">
+    <div class="section-header" onclick="toggleSection(this)">
+      完了 <span class="count">0</span> <button class="clear-done-btn" onclick="event.stopPropagation();clearDone()">クリア</button> <span class="toggle">▼</span>
+    </div>
+    <div class="section-body">
+      <div class="cards" data-col="done"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'taskboard_data';
+const COLLAPSE_KEY = 'taskboard_collapsed';
+const ARCHIVE_KEY = 'taskboard_archive_history';
+const LAST_ARCHIVE_KEY = 'taskboard_last_archive_week';
+const GH_TOKEN_KEY = 'taskboard_gh_token';
+const GH_REPO = 'usukura-P/ShunVault';
+const GH_FILE_PATH = '04.エリア/Work/タスクアーカイブ/タスクアーカイブ.md';
+const COL_NAMES = { today: '今日やる', holding: '手持ち', waiting: '待ち', done: '完了' };
+const PRIORITY_LABELS = { high: '高', mid: '中', low: '低' };
+const PRIORITY_ORDER = { high: 0, mid: 1, low: 2 };
+
+let tasks = [];
+
+// ========== データ ==========
+function loadTasks() {
+  try { tasks = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; tasks.forEach(t => { if (!t.priority) t.priority = 'mid'; }); } catch { tasks = []; }
+}
+function saveTasks() { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+// ========== 折りたたみ ==========
+function toggleSection(el) {
+  const s = el.closest('.section'); s.classList.toggle('collapsed');
+  const st = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '{}');
+  st[s.dataset.col] = s.classList.contains('collapsed');
+  localStorage.setItem(COLLAPSE_KEY, JSON.stringify(st));
+}
+function restoreCollapsed() {
+  try { const st = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '{}');
+  Object.entries(st).forEach(([col, v]) => { if (v) { const s = document.querySelector(`.section[data-col="${col}"]`); if (s) s.classList.add('collapsed'); } }); } catch {}
+}
+
+// ========== レンダリング ==========
+function render() {
+  ['holding','today','waiting','done'].forEach(col => {
+    const c = document.querySelector(`.cards[data-col="${col}"]`);
+    const ct = tasks.filter(t => t.col === col).sort((a,b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
+    c.innerHTML = '';
+    ct.forEach(t => c.appendChild(createCardEl(t)));
+    document.querySelector(`.section[data-col="${col}"] .count`).textContent = ct.length;
+  });
+}
+
+function createCardEl(task) {
+  const card = document.createElement('div');
+  card.className = 'card'; card.dataset.id = task.id; card.dataset.priority = task.priority; card.draggable = true;
+
+  const dot = document.createElement('div'); dot.className = 'priority-dot p-' + task.priority; card.appendChild(dot);
+
+  const text = document.createElement('div'); text.className = 'card-text'; text.contentEditable = true; text.textContent = task.text;
+  text.addEventListener('blur', () => { const v = text.textContent.trim(); if (!v) deleteTask(task.id); else { task.text = v; saveTasks(); } });
+  text.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); text.blur(); } });
+  card.appendChild(text);
+
+  const sel = document.createElement('select'); sel.className = 'priority-select';
+  ['high','mid','low'].forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = PRIORITY_LABELS[p]; if (p === task.priority) o.selected = true; sel.appendChild(o); });
+  sel.addEventListener('change', () => { task.priority = sel.value; saveTasks(); render(); });
+  card.appendChild(sel);
+
+  const del = document.createElement('button'); del.className = 'delete-btn'; del.textContent = '×';
+  del.addEventListener('click', e => { e.stopPropagation(); deleteTask(task.id); });
+  card.appendChild(del);
+
+  card.addEventListener('dragstart', onDragStart); card.addEventListener('dragend', onDragEnd);
+  card.addEventListener('touchstart', onTouchStart, { passive: false });
+  return card;
+}
+
+// ========== CRUD ==========
+function addTask(col, text, priority) { if (!text.trim()) return; tasks.push({ id: genId(), col, text: text.trim(), priority: priority || 'mid' }); saveTasks(); render(); }
+function deleteTask(id) { tasks = tasks.filter(t => t.id !== id); saveTasks(); render(); }
+function moveTask(id, toCol, beforeId) {
+  const task = tasks.find(t => t.id === id); if (!task) return;
+  tasks = tasks.filter(t => t.id !== id); task.col = toCol;
+  if (beforeId) { const i = tasks.findIndex(t => t.id === beforeId); tasks.splice(i, 0, task); } else tasks.push(task);
+  saveTasks(); render();
+}
+function clearDone() { tasks = tasks.filter(t => t.col !== 'done'); saveTasks(); render(); }
+
+// ========== 入力欄 ==========
+document.querySelectorAll('.add-row input').forEach(input => {
+  const col = input.closest('.section').dataset.col;
+  const ps = input.closest('.add-row').querySelector('.add-priority');
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { addTask(col, input.value, ps ? ps.value : 'mid'); input.value = ''; } });
+});
+
+// ========== PC D&D ==========
+let draggedId = null;
+function onDragStart(e) { draggedId = e.currentTarget.dataset.id; e.currentTarget.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; }
+function onDragEnd(e) { e.currentTarget.classList.remove('dragging'); draggedId = null; document.querySelectorAll('.cards').forEach(c => c.classList.remove('drag-over')); }
+document.querySelectorAll('.cards').forEach(c => {
+  c.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; c.classList.add('drag-over'); });
+  c.addEventListener('dragleave', () => c.classList.remove('drag-over'));
+  c.addEventListener('drop', e => { e.preventDefault(); c.classList.remove('drag-over'); if (!draggedId) return; const a = getDrop(c, e.clientY); moveTask(draggedId, c.dataset.col, a ? a.dataset.id : null); });
+});
+function getDrop(c, y) { for (const card of c.querySelectorAll('.card:not(.dragging)')) { const r = card.getBoundingClientRect(); if (y < r.top + r.height/2) return card; } return null; }
+
+// ========== タッチ D&D ==========
+let touchData = null;
+function onTouchStart(e) {
+  const card = e.currentTarget, touch = e.touches[0];
+  if (document.activeElement === card.querySelector('.card-text') || e.target.tagName === 'SELECT' || e.target.tagName === 'BUTTON') return;
+  const r = card.getBoundingClientRect();
+  touchData = { id: card.dataset.id, ox: touch.clientX - r.left, oy: touch.clientY - r.top, sx: touch.clientX, sy: touch.clientY, ghost: null, moved: false };
+  document.addEventListener('touchmove', onTouchMove, { passive: false }); document.addEventListener('touchend', onTouchEnd);
+}
+function onTouchMove(e) {
+  if (!touchData) return; const touch = e.touches[0];
+  if (!touchData.moved && Math.abs(touch.clientX - touchData.sx) + Math.abs(touch.clientY - touchData.sy) < 10) return;
+  touchData.moved = true; e.preventDefault();
+  if (!touchData.ghost) { const card = document.querySelector(`.card[data-id="${touchData.id}"]`); const g = document.createElement('div'); g.className = 'drag-ghost'; g.textContent = card.querySelector('.card-text').textContent; document.body.appendChild(g); touchData.ghost = g; card.classList.add('dragging'); }
+  touchData.ghost.style.left = (touch.clientX - touchData.ox) + 'px'; touchData.ghost.style.top = (touch.clientY - touchData.oy) + 'px';
+  document.querySelectorAll('.cards').forEach(c => { const r = c.getBoundingClientRect(); c.classList.toggle('drag-over', touch.clientX >= r.left && touch.clientX <= r.right && touch.clientY >= r.top && touch.clientY <= r.bottom); });
+}
+function onTouchEnd(e) {
+  document.removeEventListener('touchmove', onTouchMove); document.removeEventListener('touchend', onTouchEnd);
+  if (!touchData) return; if (touchData.ghost) touchData.ghost.remove();
+  document.querySelectorAll('.cards').forEach(c => c.classList.remove('drag-over'));
+  if (touchData.moved) { const touch = e.changedTouches[0]; const t = document.elementFromPoint(touch.clientX, touch.clientY); const c = t ? t.closest('.cards') : null;
+    if (c) { const a = getDrop(c, touch.clientY); moveTask(touchData.id, c.dataset.col, a ? a.dataset.id : null); }
+    else { const card = document.querySelector(`.card[data-id="${touchData.id}"]`); if (card) card.classList.remove('dragging'); } }
+  touchData = null;
+}
+
+// ========== アーカイブ ==========
+function getWeekLabel(d) { d = new Date(d); const j = new Date(d.getFullYear(),0,1); return `${d.getFullYear()}-W${String(Math.ceil((Math.floor((d-j)/864e5)+j.getDay()+1)/7)).padStart(2,'0')}`; }
+function ds(d) { return d.toISOString().split('T')[0]; }
+function loadHistory() { try { return JSON.parse(localStorage.getItem(ARCHIVE_KEY)) || {}; } catch { return {}; } }
+
+function buildSnapshot() {
+  const snap = {}, pc = { high:0, mid:0, low:0 }; let total = 0;
+  ['today','holding','waiting','done'].forEach(col => {
+    const ct = tasks.filter(t => t.col === col);
+    snap[col] = ct.map(t => ({ text: t.text, priority: t.priority }));
+    total += ct.length; ct.forEach(t => pc[t.priority]++);
+  });
+  return { snap, pc, total, done: snap.done.length, rate: total > 0 ? Math.round(snap.done.length/total*100) : 0 };
+}
+
+function saveArchive() {
+  const wk = getWeekLabel(new Date()), { snap, pc, total, done, rate } = buildSnapshot();
+  if (total === 0) return false;
+  const h = loadHistory(), now = new Date(), start = new Date(now); start.setDate(start.getDate()-6);
+  h[wk] = { week: wk, period: `${ds(start)} ~ ${ds(now)}`, at: now.toISOString(),
+    stats: { total, done, holding: snap.holding.length, today: snap.today.length, waiting: snap.waiting.length, rate }, priority: pc, tasks: snap };
+  localStorage.setItem(ARCHIVE_KEY, JSON.stringify(h));
+  localStorage.setItem(LAST_ARCHIVE_KEY, wk);
+  tasks = tasks.filter(t => t.col !== 'done'); saveTasks(); render();
+  return true;
+}
+
+// 手動ボタン: 保存 → GitHub同期
+async function manualArchiveAndSync() {
+  if (!saveArchive()) { showToast('アーカイブするタスクがありません'); return; }
+  showToast('アーカイブ保存しました');
+  await syncToGitHub();
+  updateBadge();
+}
+
+// 日曜自動アーカイブ
+function autoArchive() {
+  if (new Date().getDay() !== 0) return;
+  if (localStorage.getItem(LAST_ARCHIVE_KEY) === getWeekLabel(new Date())) return;
+  if (tasks.length === 0) return;
+  if (saveArchive()) {
+    showToast('週次アーカイブを自動保存しました');
+    syncToGitHub();
+    updateBadge();
+  }
+}
+
+// ========== GitHub同期 ==========
+function getToken() {
+  let token = localStorage.getItem(GH_TOKEN_KEY);
+  if (!token) {
+    token = prompt('GitHub Personal Access Token を入力してください（初回のみ）');
+    if (token) localStorage.setItem(GH_TOKEN_KEY, token.trim());
+  }
+  return token;
+}
+
+function buildMd() {
+  const h = loadHistory(), weeks = Object.keys(h).sort();
+  if (!weeks.length) return null;
+  let md = `---\ntype: task-archive\nexported: "${ds(new Date())}"\nweeks: ${weeks.length}\n---\n\n# タスクアーカイブ\n\n`;
+  weeks.forEach(wk => {
+    const w = h[wk];
+    md += `---\n\n## ${w.week}\n\n期間: ${w.period}\n\n`;
+    md += `| 指標 | 値 |\n|------|----|\n| 全タスク | ${w.stats.total} |\n| 完了 | ${w.stats.done} |\n| 完了率 | ${w.stats.rate}% |\n| 手持ち残 | ${w.stats.holding} |\n| 今日やる残 | ${w.stats.today} |\n| 待ち | ${w.stats.waiting} |\n| 高 | ${w.priority.high} |\n| 中 | ${w.priority.mid} |\n| 低 | ${w.priority.low} |\n\n`;
+    ['done','today','holding','waiting'].forEach(col => {
+      const ct = w.tasks[col] || [];
+      md += `### ${COL_NAMES[col]}（${ct.length}）\n\n`;
+      if (!ct.length) md += 'なし\n\n';
+      else { ct.forEach(t => { md += `${col==='done'?'- [x]':'- [ ]'} ${t.priority==='high'?'🔴':t.priority==='mid'?'🟡':'🔵'} ${t.text}\n`; }); md += '\n'; }
+    });
+  });
+  return md;
+}
+
+async function syncToGitHub() {
+  const token = getToken();
+  if (!token) return;
+  const md = buildMd();
+  if (!md) return;
+
+  try {
+    let sha = null;
+    const g = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${encodeURIComponent(GH_FILE_PATH)}`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' } });
+    if (g.ok) sha = (await g.json()).sha;
+
+    const body = { message: `タスクアーカイブ更新`, content: btoa(unescape(encodeURIComponent(md))) };
+    if (sha) body.sha = sha;
+
+    const r = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${encodeURIComponent(GH_FILE_PATH)}`, {
+      method: 'PUT', headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    });
+    if (r.ok) showToast('GitHubに同期しました');
+    else { const e = await r.json(); showToast('同期失敗: ' + (e.message || r.status)); }
+  } catch (e) { showToast('同期エラー: ' + e.message); }
+}
+
+// ========== UI ==========
+function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
+function updateBadge() { const c = Object.keys(loadHistory()).length; document.getElementById('archiveBadge').textContent = c > 0 ? `${c}週分` : ''; }
+
+// ========== 初期化 ==========
+loadTasks();
+restoreCollapsed();
+render();
+autoArchive();
+updateBadge();
+
+// 開きっぱなし対応: 10分ごとにチェック
+setInterval(() => { autoArchive(); updateBadge(); }, 10 * 60 * 1000);
+</script>
+</body>
+</html>

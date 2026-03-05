@@ -303,10 +303,13 @@ function createCardEl(task) {
   if (task.due) {
     const label = document.createElement('span'); label.className = 'due-label';
     const diff = Math.ceil((new Date(task.due) - new Date(new Date().toDateString())) / 864e5);
+    const days = ['日','月','火','水','木','金','土'];
+    const dueDate = new Date(task.due);
+    const dayName = days[dueDate.getDay()];
     if (diff < 0) { label.textContent = `${-diff}日超過`; label.classList.add('overdue'); }
-    else if (diff === 0) { label.textContent = '今日'; label.classList.add('today'); }
-    else if (diff <= 2) { label.textContent = `あと${diff}日`; label.classList.add('soon'); }
-    else { label.textContent = task.due.slice(5).replace('-','/'); }
+    else if (diff === 0) { label.textContent = '今日中'; label.classList.add('today'); }
+    else if (diff === 1) { label.textContent = '明日中'; label.classList.add('soon'); }
+    else { label.textContent = `${task.due.slice(5).replace('-','/')}(${dayName})`; }
     dueWrap.appendChild(label);
   }
   const dueIn = document.createElement('input'); dueIn.type = 'date'; dueIn.className = 'due-input';

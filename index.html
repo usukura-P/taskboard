@@ -302,9 +302,11 @@ function createCardEl(task) {
   dueWrap.style.display = 'flex'; dueWrap.style.alignItems = 'center'; dueWrap.style.gap = '2px'; dueWrap.style.flexShrink = '0';
   if (task.due) {
     const label = document.createElement('span'); label.className = 'due-label';
-    const diff = Math.ceil((new Date(task.due) - new Date(new Date().toDateString())) / 864e5);
+    const [y,m,d] = task.due.split('-').map(Number);
+    const dueDate = new Date(y, m-1, d);
+    const today = new Date(); today.setHours(0,0,0,0);
+    const diff = Math.round((dueDate - today) / 864e5);
     const days = ['日','月','火','水','木','金','土'];
-    const dueDate = new Date(task.due);
     const dayName = days[dueDate.getDay()];
     if (diff < 0) { label.textContent = `${-diff}日超過`; label.classList.add('overdue'); }
     else if (diff === 0) { label.textContent = '今日中'; label.classList.add('today'); }

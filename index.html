@@ -159,6 +159,12 @@ header h1 { font-size: 18px; font-weight: 600; }
 .card .due-label.overdue { color: #e74c3c; }
 .card .due-label.today { color: #27ae60; }
 .card .due-label.soon { color: #f39c12; }
+.card .done-btn {
+  width: 20px; height: 20px; border: 1.5px solid #555; background: transparent;
+  cursor: pointer; font-size: 11px; line-height: 16px; text-align: center;
+  border-radius: 50%; flex-shrink: 0; color: transparent; transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.card .done-btn:hover { border-color: #27ae60; background: #27ae60; color: #fff; }
 .card .delete-btn {
   width: 20px; height: 20px; border: none; background: transparent; color: #555;
   cursor: pointer; font-size: 15px; line-height: 20px; text-align: center;
@@ -324,6 +330,12 @@ function createCardEl(task) {
   dueIn.addEventListener('change', () => { task.due = dueIn.value || null; saveTasks(); render(); });
   dueWrap.appendChild(dueIn);
   card.appendChild(dueWrap);
+
+  if (task.col !== 'done') {
+    const done = document.createElement('button'); done.className = 'done-btn'; done.textContent = '✓';
+    done.addEventListener('click', e => { e.stopPropagation(); moveTask(task.id, 'done'); });
+    card.appendChild(done);
+  }
 
   const del = document.createElement('button'); del.className = 'delete-btn'; del.textContent = '×';
   del.addEventListener('click', e => { e.stopPropagation(); deleteTask(task.id); });

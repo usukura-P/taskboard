@@ -184,6 +184,7 @@ header h1 { font-size: 18px; font-weight: 600; }
 <header>
   <h1>タスクボード</h1>
   <div class="header-actions">
+    <span id="syncStatus" style="font-size:11px;"></span>
     <span id="archiveBadge" class="archive-badge"></span>
     <button class="archive-btn" onclick="manualArchiveAndSync()">保存</button>
   </div>
@@ -245,17 +246,21 @@ const LAST_ARCHIVE_KEY = 'taskboard_last_archive_week';
 const GH_TOKEN_KEY = 'taskboard_gh_token';
 const GH_REPO = 'usukura-P/ShunVault';
 const GH_FILE_PATH = '04.エリア/Work/タスクアーカイブ/タスクアーカイブ.md';
+const GH_TASKS_PATH = '04.エリア/Work/タスクボード_data.json';
 const COL_NAMES = { today: '今日やる', holding: '手持ち', waiting: '待ち', done: '完了' };
 const PRIORITY_LABELS = { high: '高', mid: '中', low: '低' };
 const PRIORITY_ORDER = { high: 0, mid: 1, low: 2 };
 
 let tasks = [];
+let ghTasksSha = null;
+let syncTimer = null;
+let syncing = false;
 
 // ========== データ ==========
 function loadTasks() {
   try { tasks = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; tasks.forEach((t, i) => { if (!t.priority) t.priority = 'mid'; if (!t.createdAt) t.createdAt = i; }); } catch { tasks = []; }
 }
-function saveTasks() { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }
+function saveTasks() { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); debouncedSyncTasks(); }
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
 // ========== 折りたたみ ==========
@@ -501,6 +506,87 @@ async function syncToGitHub() {
   } catch (e) { showToast('同期エラー: ' + e.message); }
 }
 
+// ========== タスクデータGitHub同期 ==========
+function setSyncStatus(s) {
+  const el = document.getElementById('syncStatus');
+  if (s === 'syncing') { el.textContent = '同期中…'; el.style.color = '#f39c12'; }
+  else if (s === 'done') { el.textContent = '同期済'; el.style.color = '#27ae60'; setTimeout(() => { el.textContent = ''; }, 2000); }
+  else if (s === 'error') { el.textContent = '同期失敗'; el.style.color = '#e74c3c'; }
+  else { el.textContent = ''; }
+}
+
+function debouncedSyncTasks() {
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => saveTasksToGitHub(), 2000);
+}
+
+async function loadTasksFromGitHub() {
+  const token = getToken();
+  if (!token) return;
+  try {
+    setSyncStatus('syncing');
+    const r = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${encodeURIComponent(GH_TASKS_PATH)}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (r.ok) {
+      const data = await r.json();
+      ghTasksSha = data.sha;
+      const json = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
+      const remoteTasks = JSON.parse(json);
+      if (Array.isArray(remoteTasks) && remoteTasks.length > 0) {
+        // リモートのほうが新しければ上書き（最終更新タイムスタンプで判断）
+        const localMax = tasks.reduce((m, t) => Math.max(m, t.createdAt || 0), 0);
+        const remoteMax = remoteTasks.reduce((m, t) => Math.max(m, t.createdAt || 0), 0);
+        if (remoteMax >= localMax || tasks.length === 0) {
+          tasks = remoteTasks;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+          render();
+        }
+      }
+    } else if (r.status === 404) {
+      // ファイルがまだない → 初回保存
+      ghTasksSha = null;
+    }
+    setSyncStatus('done');
+  } catch (e) {
+    console.error('GitHub読み込み失敗:', e);
+    setSyncStatus('error');
+  }
+}
+
+async function saveTasksToGitHub() {
+  const token = localStorage.getItem(GH_TOKEN_KEY);
+  if (!token || syncing) return;
+  syncing = true;
+  try {
+    setSyncStatus('syncing');
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(tasks, null, 2))));
+    const body = { message: 'タスクボード更新', content };
+
+    // 最新のshaを取得（他デバイスが更新している可能性）
+    const g = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${encodeURIComponent(GH_TASKS_PATH)}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (g.ok) body.sha = (await g.json()).sha;
+
+    const r = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${encodeURIComponent(GH_TASKS_PATH)}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (r.ok) {
+      const data = await r.json();
+      ghTasksSha = data.content.sha;
+      setSyncStatus('done');
+    } else {
+      setSyncStatus('error');
+    }
+  } catch (e) {
+    console.error('GitHub保存失敗:', e);
+    setSyncStatus('error');
+  } finally { syncing = false; }
+}
+
 // ========== UI ==========
 function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
 function updateBadge() { const c = Object.keys(loadHistory()).length; document.getElementById('archiveBadge').textContent = c > 0 ? `${c}週分` : ''; }
@@ -511,6 +597,9 @@ restoreCollapsed();
 render();
 autoArchive();
 updateBadge();
+
+// GitHub からタスクデータ読み込み（ページ表示後に非同期）
+loadTasksFromGitHub();
 
 // 開きっぱなし対応: 10分ごとにチェック
 setInterval(() => { autoArchive(); updateBadge(); }, 10 * 60 * 1000);

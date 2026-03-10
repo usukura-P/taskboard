@@ -200,7 +200,7 @@ header h1 { font-size: 18px; font-weight: 600; }
 <div class="board" id="board">
   <div class="section" data-col="today">
     <div class="section-header" onclick="toggleSection(this)">
-      今日やる <span class="count">0</span> <span class="toggle">▼</span>
+      タスク <span class="count">0</span> <span class="toggle">▼</span>
     </div>
     <div class="section-body">
       <div class="add-row">
@@ -253,7 +253,7 @@ const GH_TOKEN_KEY = 'taskboard_gh_token';
 const GH_REPO = 'usukura-P/ShunVault';
 const GH_FILE_PATH = '04.エリア/Work/タスクアーカイブ/タスクアーカイブ.md';
 const GH_TASKS_PATH = '04.エリア/Work/タスクボード_data.json';
-const COL_NAMES = { today: '今日やる', holding: '手持ち', waiting: '待ち', done: '完了' };
+const COL_NAMES = { today: 'タスク', holding: '手持ち', waiting: '待ち', done: '完了' };
 const PRIORITY_LABELS = { high: '高', mid: '中', low: '低' };
 const PRIORITY_ORDER = { high: 0, mid: 1, low: 2 };
 

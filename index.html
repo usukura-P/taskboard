@@ -145,9 +145,8 @@ header h1 { font-size: 18px; font-weight: 600; }
 .priority-dot.p-high { background: #e74c3c; }
 .priority-dot.p-mid { background: #f39c12; }
 .priority-dot.p-low { background: #3498db; }
-.card[data-priority="high"] { background: #2a1a1a; border-left: 3px solid #e74c3c; }
-.card[data-priority="mid"] { background: #2a2518; border-left: 3px solid #f39c12; }
-.card[data-priority="low"] { background: #1a2230; border-left: 3px solid #3498db; }
+/* 締切グラデーション: JSでインラインスタイル設定。期日なしはデフォルト */
+.card { border-left: 3px solid #444; }
 .card .card-text { flex: 1; outline: none; min-height: 1.3em; word-break: break-word; }
 .card .card-text:focus { background: #333340; border-radius: 3px; padding: 1px 4px; margin: -1px -4px; }
 .card .priority-select { border: none; background: transparent; font-size: 11px; cursor: pointer; outline: none; color: #777; padding: 2px; flex-shrink: 0; }
@@ -292,9 +291,28 @@ function render() {
   });
 }
 
+function getDueColor(due) {
+  if (!due) return null;
+  const [y,m,d] = due.split('-').map(Number);
+  const dueDate = new Date(y, m-1, d);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const diff = Math.round((dueDate - today) / 864e5);
+  if (diff < 0) return { bg: 'rgba(231,76,60,0.18)', border: '#e74c3c' }; // 超過: 赤固定
+  const t = Math.max(0, Math.min(1, 1 - diff / 7)); // 0(7日以上)→1(当日)
+  // 緑(0) → 黄(0.5) → 赤(1)
+  let r, g, b;
+  if (t <= 0.5) { const p = t * 2; r = Math.round(39 + (243 - 39) * p); g = Math.round(174 + (156 - 174) * p); b = Math.round(96 + (18 - 96) * p); }
+  else { const p = (t - 0.5) * 2; r = Math.round(243 + (231 - 243) * p); g = Math.round(156 + (76 - 156) * p); b = Math.round(18 + (60 - 18) * p); }
+  return { bg: `rgba(${r},${g},${b},0.15)`, border: `rgb(${r},${g},${b})` };
+}
+
 function createCardEl(task) {
   const card = document.createElement('div');
   card.className = 'card'; card.dataset.id = task.id; card.dataset.priority = task.priority; card.draggable = true;
+
+  // 締切ベースの色
+  const dueColor = getDueColor(task.due);
+  if (dueColor) { card.style.background = dueColor.bg; card.style.borderLeftColor = dueColor.border; }
 
   const dot = document.createElement('div'); dot.className = 'priority-dot p-' + task.priority; card.appendChild(dot);
 
